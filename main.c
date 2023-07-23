@@ -193,7 +193,7 @@ l2fwd_main_loop(void)
 	int sent;
 	unsigned lcore_id;
 	uint64_t prev_tsc, diff_tsc, cur_tsc;
-	unsigned i, j, portid, nb_rx;
+	unsigned j, portid, nb_rx;
 	const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S *
 			BURST_TX_DRAIN_US;
 	struct rte_eth_dev_tx_buffer *buffer;
@@ -401,6 +401,14 @@ onvm_pkt_udp_hdr(struct rte_mbuf* pkt) {
                 rte_pktmbuf_mtod(pkt, uint8_t*) + sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr);
         return (struct rte_udp_hdr*)pkt_data;
 }
+
+struct onvm_ft_ipv4_5tuple {
+        uint32_t src_addr;
+        uint32_t dst_addr;
+        uint16_t src_port;
+        uint16_t dst_port;
+        uint8_t proto;
+};
 
 static inline int
 onvm_ft_fill_key(struct onvm_ft_ipv4_5tuple *key, struct rte_mbuf *pkt) {
