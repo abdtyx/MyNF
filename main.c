@@ -151,39 +151,6 @@ do_stats_display(struct rte_mbuf *pkt) {
         printf("\n\n");
 }
 
-static void
-l2fwd_simple_forward(struct rte_mbuf *m, unsigned portid)
-{
-	static uint32_t counter = 0;
-	if (counter++ == print_delay) {
-			do_stats_display(m);
-			counter = 0;
-	}
-
-	struct hack_pkt_meta *meta = hack_get_pkt_meta(m);
-
-	if (ONVM_CHECK_BIT(meta->flags, SPEED_TESTER_BIT)) {
-			/* one of our fake pkts to forward */
-			meta->destination = 1;
-			meta->action = ONVM_NF_ACTION_TONF;
-			if (measure_latency && ONVM_CHECK_BIT(meta->flags, LATENCY_BIT)) {
-					uint64_t curtime = rte_get_tsc_cycles();
-					uint64_t *oldtime = (uint64_t *)(rte_pktmbuf_mtod(m, uint8_t *) + 14);
-					if (*oldtime != 0) {
-							total_latency += curtime - *oldtime;
-							latency_packets++;
-					}
-					*oldtime = curtime;
-			}
-	} else {
-			/* Drop real incoming packets */
-			meta->action = ONVM_NF_ACTION_DROP;
-	}
-
-	// After pkt action, transmit it
-	rte_eth_tx_buffer(portid, 0, tx_buffer, m);
-}
-
 /* display usage */
 static void
 l2fwd_usage(const char *prgname)
@@ -486,6 +453,38 @@ void nf_hack_pkt() {
 
 }
 
+static void
+l2fwd_simple_forward(struct rte_mbuf *m, unsigned portid)
+{
+	static uint32_t counter = 0;
+	if (counter++ == print_delay) {
+			do_stats_display(m);
+			counter = 0;
+	}
+
+	struct hack_pkt_meta *meta = hack_get_pkt_meta(m);
+
+	if (ONVM_CHECK_BIT(meta->flags, SPEED_TESTER_BIT)) {
+			/* one of our fake pkts to forward */
+			meta->destination = 1;
+			meta->action = ONVM_NF_ACTION_TONF;
+			if (measure_latency && ONVM_CHECK_BIT(meta->flags, LATENCY_BIT)) {
+					uint64_t curtime = rte_get_tsc_cycles();
+					uint64_t *oldtime = (uint64_t *)(rte_pktmbuf_mtod(m, uint8_t *) + 14);
+					if (*oldtime != 0) {
+							total_latency += curtime - *oldtime;
+							latency_packets++;
+					}
+					*oldtime = curtime;
+			}
+	} else {
+			/* Drop real incoming packets */
+			meta->action = ONVM_NF_ACTION_DROP;
+	}
+
+	// After pkt action, transmit it
+	rte_eth_tx_buffer(portid, 0, tx_buffer, m);
+}
 
 /* main processing loop */
 static void
