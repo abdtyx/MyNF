@@ -184,71 +184,6 @@ l2fwd_simple_forward(struct rte_mbuf *m, unsigned portid)
 	rte_eth_tx_buffer(portid, 0, tx_buffer, m);
 }
 
-/* main processing loop */
-static void
-l2fwd_main_loop(void)
-{
-	struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
-	struct rte_mbuf *m;
-	int sent;
-	unsigned lcore_id;
-	uint64_t prev_tsc, diff_tsc, cur_tsc;
-	unsigned j, portid, nb_rx;
-	const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S *
-			BURST_TX_DRAIN_US;
-	struct rte_eth_dev_tx_buffer *buffer;
-
-	prev_tsc = 0;
-
-	lcore_id = rte_lcore_id();
-
-	RTE_LOG(INFO, L2FWD, "entering main loop on lcore %u\n", lcore_id);
-
-	while (!force_quit) {
-
-		cur_tsc = rte_rdtsc();
-
-		/*
-		 * TX burst queue drain
-		 */
-		diff_tsc = cur_tsc - prev_tsc;
-		if (unlikely(diff_tsc > drain_tsc)) {
-
-			portid = PORTID;
-			buffer = tx_buffer;
-
-			sent = rte_eth_tx_buffer_flush(portid, 0, buffer);
-			if (sent)
-				port_statistics[portid].tx += sent;
-
-
-			prev_tsc = cur_tsc;
-		}
-
-		/*
-		 * Read packet from RX queues
-		 */
-		portid = PORTID;
-		nb_rx = rte_eth_rx_burst(portid, 0,
-						pkts_burst, MAX_PKT_BURST);
-
-		port_statistics[portid].rx += nb_rx;
-
-		for (j = 0; j < nb_rx; j++) {
-			m = pkts_burst[j];
-			rte_prefetch0(rte_pktmbuf_mtod(m, void *));
-			l2fwd_simple_forward(m, portid);
-		}
-	}
-}
-
-static int
-l2fwd_launch_one_lcore(__rte_unused void *dummy)
-{
-	l2fwd_main_loop();
-	return 0;
-}
-
 /* display usage */
 static void
 l2fwd_usage(const char *prgname)
@@ -551,14 +486,78 @@ void nf_hack_pkt() {
 
 }
 
+
+/* main processing loop */
+static void
+l2fwd_main_loop(void)
+{
+	struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
+	struct rte_mbuf *m;
+	int sent;
+	unsigned lcore_id;
+	uint64_t prev_tsc, diff_tsc, cur_tsc;
+	unsigned j, portid, nb_rx;
+	const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S *
+			BURST_TX_DRAIN_US;
+	struct rte_eth_dev_tx_buffer *buffer;
+
+	prev_tsc = 0;
+
+	lcore_id = rte_lcore_id();
+
+	RTE_LOG(INFO, L2FWD, "entering main loop on lcore %u\n", lcore_id);
+
+	while (!force_quit) {
+
+		cur_tsc = rte_rdtsc();
+
+		/*
+		 * TX burst queue drain
+		 */
+		diff_tsc = cur_tsc - prev_tsc;
+		if (unlikely(diff_tsc > drain_tsc)) {
+
+			portid = PORTID;
+			buffer = tx_buffer;
+
+			sent = rte_eth_tx_buffer_flush(portid, 0, buffer);
+			if (sent)
+				port_statistics[portid].tx += sent;
+
+
+			prev_tsc = cur_tsc;
+		}
+
+		/*
+		 * Read packet from RX queues
+		 */
+		portid = PORTID;
+		nb_rx = rte_eth_rx_burst(portid, 0,
+						pkts_burst, MAX_PKT_BURST);
+
+		port_statistics[portid].rx += nb_rx;
+
+		for (j = 0; j < nb_rx; j++) {
+			m = pkts_burst[j];
+			rte_prefetch0(rte_pktmbuf_mtod(m, void *));
+			l2fwd_simple_forward(m, portid);
+		}
+	}
+}
+
+static int
+l2fwd_launch_one_lcore(__rte_unused void *dummy)
+{
+	l2fwd_main_loop();
+	return 0;
+}
+
 int
 main(int argc, char **argv)
 {
 	int ret;
 	uint16_t nb_ports;
-	uint16_t portid, last_port;
 	unsigned lcore_id;
-	unsigned nb_ports_in_mask = 0;
 	unsigned int nb_lcores = 0;
 	unsigned int nb_mbufs;
 
@@ -584,11 +583,6 @@ main(int argc, char **argv)
 	timer_period *= rte_get_timer_hz();
 
 	nb_ports = 1;
-
-	if (nb_ports_in_mask % 2) {
-		printf("Notice: odd number of ports in portmask.\n");
-		l2fwd_dst_ports[last_port] = last_port;
-	}
 
 	/* Initialize the port/queue configuration of each logical core */
 	nb_mbufs = RTE_MAX(nb_ports * (nb_rxd + nb_txd + MAX_PKT_BURST +
