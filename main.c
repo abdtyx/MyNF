@@ -245,7 +245,7 @@ signal_handler(int signum)
 #define IP_PROTOCOL_TCP 6
 #define IP_PROTOCOL_UDP 17
 
-struct rte_ipv4_hdr*
+static struct rte_ipv4_hdr*
 onvm_pkt_ipv4_hdr(struct rte_mbuf* pkt) {
         struct rte_ipv4_hdr* ipv4 =
                 (struct rte_ipv4_hdr*)(rte_pktmbuf_mtod(pkt, uint8_t*) + sizeof(struct rte_ether_hdr));
@@ -261,12 +261,12 @@ onvm_pkt_ipv4_hdr(struct rte_mbuf* pkt) {
         return ipv4;
 }
 
-int
+static int
 onvm_pkt_is_ipv4(struct rte_mbuf* pkt) {
         return onvm_pkt_ipv4_hdr(pkt) != NULL;
 }
 
-struct rte_tcp_hdr*
+static struct rte_tcp_hdr*
 onvm_pkt_tcp_hdr(struct rte_mbuf* pkt) {
         struct rte_ipv4_hdr* ipv4 = onvm_pkt_ipv4_hdr(pkt);
 
@@ -285,7 +285,7 @@ onvm_pkt_tcp_hdr(struct rte_mbuf* pkt) {
         return (struct rte_tcp_hdr*)pkt_data;
 }
 
-struct rte_udp_hdr*
+static struct rte_udp_hdr*
 onvm_pkt_udp_hdr(struct rte_mbuf* pkt) {
         struct rte_ipv4_hdr* ipv4 = onvm_pkt_ipv4_hdr(pkt);
 
@@ -366,7 +366,8 @@ onvm_softrss(struct onvm_ft_ipv4_5tuple *key) {
 	return rss_l3l4;
 }
 
-void nf_hack_pkt() {
+static void
+nf_hack_pkt() {
 	pcap_filename = strdup("virtual_packet.pcap");
 
 	uint32_t i;
