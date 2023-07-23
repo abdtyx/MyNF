@@ -23,7 +23,7 @@ PC_FILE := $(shell $(PKGCONF) --path libdpdk 2>/dev/null)
 CFLAGS += -O3 $(shell $(PKGCONF) --cflags libdpdk)
 # Add flag to allow experimental API as l2fwd uses rte_ethdev_set_ptype API
 CFLAGS += -DALLOW_EXPERIMENTAL_API
-LDFLAGS += -lpcap
+
 LDFLAGS_SHARED = $(shell $(PKGCONF) --libs libdpdk)
 LDFLAGS_STATIC = -Wl,-Bstatic $(shell $(PKGCONF) --static --libs libdpdk)
 
@@ -56,6 +56,7 @@ CFLAGS += -O3
 CFLAGS += $(WERROR_FLAGS)
 # Add flag to allow experimental API as l2fwd uses rte_ethdev_set_ptype API
 CFLAGS += -DALLOW_EXPERIMENTAL_API
+LDFLAGS += -lpcap
 
 include $(RTE_SDK)/mk/rte.extapp.mk
 endif
