@@ -367,7 +367,7 @@ onvm_softrss(struct onvm_ft_ipv4_5tuple *key) {
 }
 
 static void
-nf_hack_pkt() {
+nf_hack_pkt(void) {
 	pcap_filename = strdup("virtual_packet.pcap");
 
 	uint32_t i;
