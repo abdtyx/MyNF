@@ -99,6 +99,8 @@ static uint16_t destination = 0;
 /* Default number of packets: 128; user can modify it by -c <packet_number> in command line */
 static uint32_t packet_number = 0;
 char *pcap_filename = NULL;
+pcap_t* handle;
+char errbuf[PCAP_ERRBUF_SIZE];
 
 #define ONVM_CHECK_BIT(flags, n) !!((flags) & (1 << (n)))
 #define ONVM_SET_BIT(flags, n) ((flags) | (1 << (n)))
@@ -368,123 +370,168 @@ onvm_softrss(struct onvm_ft_ipv4_5tuple *key) {
 
 static void
 nf_hack_pkt(void) {
-	pcap_filename = strdup("virtual_packet.pcap");
+	// pcap_filename = strdup("virtual_packet.pcap");
 
-	uint32_t i;
-	uint32_t pkts_generated;
-	struct rte_mempool *pktmbuf_pool;
+	// uint32_t i;
+	// uint32_t pkts_generated;
+	// struct rte_mempool *pktmbuf_pool;
 
-	pkts_generated = 0;
-	pktmbuf_pool = l2fwd_pktmbuf_pool;
-	if (pktmbuf_pool == NULL) {
-		rte_exit(EXIT_FAILURE, "Cannot find mbuf pool!\n");
-	}
+	// pkts_generated = 0;
+	// pktmbuf_pool = l2fwd_pktmbuf_pool;
+	// if (pktmbuf_pool == NULL) {
+	// 	rte_exit(EXIT_FAILURE, "Cannot find mbuf pool!\n");
+	// }
 
-	struct rte_mbuf *pkt;
-	pcap_t *pcap;
-	const u_char *packet;
-	struct pcap_pkthdr header;
-	char errbuf[PCAP_ERRBUF_SIZE];
-	uint32_t max_elt_size;
+	// struct rte_mbuf *pkt;
+	// pcap_t *pcap;
+	// const u_char *packet;
+	// struct pcap_pkthdr header;
+	// uint32_t max_elt_size;
 
-	printf("Replaying %s pcap file\n", pcap_filename);
+	// printf("Replaying %s pcap file\n", pcap_filename);
 
-	pcap = pcap_open_offline(pcap_filename, errbuf);
-	if (pcap == NULL) {
-		fprintf(stderr, "Error reading pcap file: %s\n", errbuf);
-		rte_exit(EXIT_FAILURE, "Cannot open pcap file\n");
-	}
+	// pcap = pcap_open_offline(pcap_filename, errbuf);
+	// if (pcap == NULL) {
+	// 	fprintf(stderr, "Error reading pcap file: %s\n", errbuf);
+	// 	rte_exit(EXIT_FAILURE, "Cannot open pcap file\n");
+	// }
 
-	packet_number = (use_custom_pkt_count ? packet_number : MAX_PKT_NUM);
-	struct rte_mbuf *pkts[packet_number];
+	// packet_number = (use_custom_pkt_count ? packet_number : MAX_PKT_NUM);
+	// struct rte_mbuf *pkts[packet_number];
 
-	i = 0;
+	// i = 0;
 
-	/* 
-		* max_elt_size is the maximum preallocated memory size permitted for each packet, 
-		* adjusted for the memory offset of the rte_mbuf struct and header/tail lengths
-		*/
+	// /* 
+	// 	* max_elt_size is the maximum preallocated memory size permitted for each packet, 
+	// 	* adjusted for the memory offset of the rte_mbuf struct and header/tail lengths
+	// 	*/
 	
-	max_elt_size = pktmbuf_pool->elt_size - sizeof(struct rte_mbuf) - pktmbuf_pool->header_size - pktmbuf_pool->trailer_size;
+	// max_elt_size = pktmbuf_pool->elt_size - sizeof(struct rte_mbuf) - pktmbuf_pool->header_size - pktmbuf_pool->trailer_size;
 
-	// Read from file, not manager
-	while (((packet = pcap_next(pcap, &header)) != NULL) && (i < packet_number)) {
-		struct hack_pkt_meta *pmeta;
-		struct onvm_ft_ipv4_5tuple key;
+	// // Read from file, not manager
+	// while (((packet = pcap_next(pcap, &header)) != NULL) && (i < packet_number)) {
+	// 	struct hack_pkt_meta *pmeta;
+	// 	struct onvm_ft_ipv4_5tuple key;
 
-		/* Length of the packet cannot exceed preallocated storage size */
-		if (header.caplen > max_elt_size) {
-			continue;
-		}
+	// 	/* Length of the packet cannot exceed preallocated storage size */
+	// 	if (header.caplen > max_elt_size) {
+	// 		continue;
+	// 	}
 
-		pkt = rte_pktmbuf_alloc(pktmbuf_pool);
-		if (pkt == NULL)
-				break;
+	// 	pkt = rte_pktmbuf_alloc(pktmbuf_pool);
+	// 	if (pkt == NULL)
+	// 			break;
 
-		pkt->pkt_len = header.caplen;
-		pkt->data_len = header.caplen;
+	// 	pkt->pkt_len = header.caplen;
+	// 	pkt->data_len = header.caplen;
 
-		/* Copy the packet into the rte_mbuf data section */
-		rte_memcpy(rte_pktmbuf_mtod(pkt, char *), packet, header.caplen);
+	// 	/* Copy the packet into the rte_mbuf data section */
+	// 	rte_memcpy(rte_pktmbuf_mtod(pkt, char *), packet, header.caplen);
 
-		pmeta = hack_get_pkt_meta(pkt);
-		pmeta->destination = destination;
-		pmeta->action = ONVM_NF_ACTION_TONF;
-		pmeta->flags = ONVM_SET_BIT(0, SPEED_TESTER_BIT);
+	// 	pmeta = hack_get_pkt_meta(pkt);
+	// 	pmeta->destination = destination;
+	// 	pmeta->action = ONVM_NF_ACTION_TONF;
+	// 	pmeta->flags = ONVM_SET_BIT(0, SPEED_TESTER_BIT);
 
-		onvm_ft_fill_key(&key, pkt);
-		pkt->hash.rss = onvm_softrss(&key);
+	// 	onvm_ft_fill_key(&key, pkt);
+	// 	pkt->hash.rss = onvm_softrss(&key);
 
-		/* Add packet to batch, and update counter */
-		pkts[i++] = pkt;
-		pkts_generated++;
-	}
+	// 	/* Add packet to batch, and update counter */
+	// 	pkts[i++] = pkt;
+	// 	pkts_generated++;
+	// }
 
-	// pkts tx burst
-	for (unsigned int i = 0; i < packet_number; i++) {
-		rte_eth_tx_burst(PORTID, 0, pkts, pkts_generated);
-	}
+	// /* Exit if packets were unexpectedly not created */
+	// if (pkts_generated == 0 && packet_number > 0) {
+	// 	rte_exit(EXIT_FAILURE, "Failed to create packets\n");
+	// }
 
-	/* Exit if packets were unexpectedly not created */
-	if (pkts_generated == 0 && packet_number > 0) {
-		rte_exit(EXIT_FAILURE, "Failed to create packets\n");
-	}
-
-	packet_number = pkts_generated;
+	// packet_number = pkts_generated;
 
 }
 
+static void* forge_pkts(__attribute__((unused)) void* arg) {
+	// pkts tx burst
+	// TODO:
+
+    // // 构造IP数据报
+    // struct ip ip_header;
+    // memset(&ip_header, 0, sizeof(struct ip));
+    // ip_header.ip_v = 4;         // IPv4
+    // ip_header.ip_hl = 5;        // IP头部长度为5个32位字长
+    // ip_header.ip_tos = 0;       // 服务类型字段
+    // ip_header.ip_len = htons(sizeof(struct ip) + sizeof(struct udphdr) + 8); // IP数据报总长度
+    // ip_header.ip_id = 0;        // 标识字段
+    // ip_header.ip_off = 0;       // 片偏移字段
+    // ip_header.ip_ttl = 64;      // 生存时间
+    // ip_header.ip_p = IPPROTO_UDP; // 上层协议为UDP
+    // ip_header.ip_sum = 0;       // 先将校验和设置为0
+    // ip_header.ip_src.s_addr = inet_addr("192.168.0.1"); // 源IP地址
+    // ip_header.ip_dst.s_addr = inet_addr("192.168.0.2"); // 目的IP地址
+    // ip_header.ip_sum = in_cksum((unsigned short *)&ip_header, sizeof(struct ip)); // 计算校验和
+
+    // // 构造UDP数据报
+    // struct udphdr udp_header;
+    // memset(&udp_header, 0, sizeof(struct udphdr));
+    // udp_header.uh_sport = htons(12345); // 源端口
+    // udp_header.uh_dport = htons(54321); // 目的端口
+    // udp_header.uh_ulen = htons(sizeof(struct udphdr) + 8); // UDP数据报总长度
+    // udp_header.uh_sum = 0; // 先将校验和设置为0
+
+    // // 构造数据
+    // char data[] = "Hello!"; // 数据内容
+
+    // // 构造完整的数据包
+    // char packet[sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr) + 8];
+    // memcpy(packet, &ip_header, sizeof(struct ip));
+    // memcpy(packet + sizeof(struct ip), &udp_header, sizeof(struct udphdr));
+    // memcpy(packet + sizeof(struct ip) + sizeof(struct udphdr), data, sizeof(data));
+	
+	char packet_data[] = "Hello!";
+	int packet_length = strlen(packet_data);
+
+	for (unsigned int i = 0; i < packet_number; i++) {
+		if (pcap_sendpacket(handle, (const u_char*)packet_data, packet_length) != 0) {
+			fprintf(stderr, "Error sending the packet: %s\n", pcap_geterr(handle));
+		}
+	}
+}
+
 static void
-l2fwd_simple_forward(struct rte_mbuf *m, unsigned portid)
+l2fwd_simple_forward(__attribute__((unused)) u_char *user, __attribute__((unused)) const struct pcap_pkthdr *pkthdr, const u_char *packet)
 {
 	static uint32_t counter = 0;
 	if (counter++ == print_delay) {
-			do_stats_display(m);
+			do_stats_display(NULL);
 			counter = 0;
 	}
 
-	struct hack_pkt_meta *meta = hack_get_pkt_meta(m);
+	// struct hack_pkt_meta *meta = hack_get_pkt_meta(m);
 
-	if (ONVM_CHECK_BIT(meta->flags, SPEED_TESTER_BIT)) {
-			/* one of our fake pkts to forward */
-			meta->destination = 1;
-			meta->action = ONVM_NF_ACTION_TONF;
-			if (measure_latency && ONVM_CHECK_BIT(meta->flags, LATENCY_BIT)) {
-					uint64_t curtime = rte_get_tsc_cycles();
-					uint64_t *oldtime = (uint64_t *)(rte_pktmbuf_mtod(m, uint8_t *) + 14);
-					if (*oldtime != 0) {
-							total_latency += curtime - *oldtime;
-							latency_packets++;
-					}
-					*oldtime = curtime;
-			}
-	} else {
-			/* Drop real incoming packets */
-			meta->action = ONVM_NF_ACTION_DROP;
-	}
+	// if (ONVM_CHECK_BIT(meta->flags, SPEED_TESTER_BIT)) {
+	// 		/* one of our fake pkts to forward */
+	// 		meta->destination = 1;
+	// 		meta->action = ONVM_NF_ACTION_TONF;
+	// 		if (measure_latency && ONVM_CHECK_BIT(meta->flags, LATENCY_BIT)) {
+	// 				uint64_t curtime = rte_get_tsc_cycles();
+	// 				uint64_t *oldtime = (uint64_t *)(rte_pktmbuf_mtod(m, uint8_t *) + 14);
+	// 				if (*oldtime != 0) {
+	// 						total_latency += curtime - *oldtime;
+	// 						latency_packets++;
+	// 				}
+	// 				*oldtime = curtime;
+	// 		}
+	// } else {
+	// 		/* Drop real incoming packets */
+	// 		meta->action = ONVM_NF_ACTION_DROP;
+	// }
 
 	// After pkt action, transmit it
-	rte_eth_tx_buffer(portid, 0, tx_buffer, m);
+	// TODO:
+	if (strcmp(packet, "Hello!")) return;
+	if (pcap_sendpacket(handle, (const u_char*)packet, strlen(packet)) != 0) {
+		fprintf(stderr, "Error sending the packet: %s\n", pcap_geterr(handle));
+	}
 }
 
 /* main processing loop */
@@ -508,40 +555,9 @@ l2fwd_main_loop(void)
 	RTE_LOG(INFO, L2FWD, "entering main loop on lcore %u\n", lcore_id);
 
 	while (!force_quit) {
-
-		cur_tsc = rte_rdtsc();
-
-		/*
-		 * TX burst queue drain
-		 */
-		diff_tsc = cur_tsc - prev_tsc;
-		if (unlikely(diff_tsc > drain_tsc)) {
-
-			portid = PORTID;
-			buffer = tx_buffer;
-
-			sent = rte_eth_tx_buffer_flush(portid, 0, buffer);
-			if (sent)
-				port_statistics[portid].tx += sent;
-
-
-			prev_tsc = cur_tsc;
-		}
-
-		/*
-		 * Read packet from RX queues
-		 */
-		portid = PORTID;
-		nb_rx = rte_eth_rx_burst(portid, 0,
-						pkts_burst, MAX_PKT_BURST);
-
-		port_statistics[portid].rx += nb_rx;
-
-		for (j = 0; j < nb_rx; j++) {
-			m = pkts_burst[j];
-			rte_prefetch0(rte_pktmbuf_mtod(m, void *));
-			l2fwd_simple_forward(m, portid);
-		}
+		// rx and forward
+		// TODO:
+		pcap_dispatch(handle, 1, l2fwd_simple_forward, NULL);
 	}
 }
 
@@ -560,6 +576,14 @@ main(int argc, char **argv)
 	unsigned lcore_id;
 	unsigned int nb_lcores = 0;
 	unsigned int nb_mbufs;
+
+    const char* dev = "wlo1"; // 网络设备名，根据实际情况修改
+
+    handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
+    if (handle == NULL) {
+        fprintf(stderr, "Could not open device %s: %s\n", dev, errbuf);
+        return 1;
+    }
 
 	/* init EAL */
 	ret = rte_eal_init(argc, argv);
@@ -584,11 +608,6 @@ main(int argc, char **argv)
 
 	nb_ports = 1;
 
-	nb_ports = rte_eth_dev_count_avail();
-	if (nb_ports == 0) {
-		rte_exit(EXIT_FAILURE, "No Ethernet ports found\n");
-	}
-
 	/* Initialize the port/queue configuration of each logical core */
 	nb_mbufs = RTE_MAX(nb_ports * (nb_rxd + nb_txd + MAX_PKT_BURST +
 		nb_lcores * MEMPOOL_CACHE_SIZE), 8192U);
@@ -602,40 +621,10 @@ main(int argc, char **argv)
 
 	ret = 0;
 
-	// 配置port参数
-	struct rte_eth_conf port_conf = {
-        .rxmode = {
-            .mq_mode = ETH_MQ_RX_NONE,
-        },
-        .txmode = {
-            .mq_mode = ETH_MQ_TX_NONE,
-        },
-    };
-	port_id = 0;
-    ret = rte_eth_dev_configure(port_id, NUM_RX_QUEUE, NUM_TX_QUEUE, &port_conf);
-    if (ret < 0) {
-        rte_exit(EXIT_FAILURE, "Port configuration failed\n");
-    }
-
-    // 分配内存资源
-    ret = rte_eth_rx_queue_setup(port_id, 0, RX_QUEUE_SIZE, rte_eth_dev_socket_id(port_id), NULL, NULL);
-    if (ret < 0) {
-        rte_exit(EXIT_FAILURE, "Rx queue setup failed\n");
-    }
-    ret = rte_eth_tx_queue_setup(port_id, 0, TX_QUEUE_SIZE, rte_eth_dev_socket_id(port_id), NULL);
-    if (ret < 0) {
-        rte_exit(EXIT_FAILURE, "Tx queue setup failed\n");
-    }
-
-    // 启动port
-    ret = rte_eth_dev_start(port_id);
-    if (ret < 0) {
-        rte_exit(EXIT_FAILURE, "Port start failed\n");
-    }
-
-
 	// forge data packets
 	nf_hack_pkt();
+	pthread_t thread_num;
+	pthread_create(&thread_num, NULL, forge_pkts, NULL);
 
 	/* launch per-lcore init on every lcore */
 	rte_eal_mp_remote_launch(l2fwd_launch_one_lcore, NULL, CALL_MASTER);
