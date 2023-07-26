@@ -584,6 +584,11 @@ main(int argc, char **argv)
 
 	nb_ports = 1;
 
+	nb_ports = rte_eth_dev_count_avail();
+	if (nb_ports == 0) {
+		rte_exit(EXIT_FAILURE, "No Ethernet ports found\n");
+	}
+
 	/* Initialize the port/queue configuration of each logical core */
 	nb_mbufs = RTE_MAX(nb_ports * (nb_rxd + nb_txd + MAX_PKT_BURST +
 		nb_lcores * MEMPOOL_CACHE_SIZE), 8192U);
@@ -597,13 +602,6 @@ main(int argc, char **argv)
 
 	ret = 0;
 
-
-    // 获取第一个可用的port ID
-	port_id = rte_eth_find_next(0);
-    if (port_id >= RTE_MAX_ETHPORTS) {
-        rte_exit(EXIT_FAILURE, "No available port found\n");
-    }
-
 	// 配置port参数
 	struct rte_eth_conf port_conf = {
         .rxmode = {
@@ -613,6 +611,7 @@ main(int argc, char **argv)
             .mq_mode = ETH_MQ_TX_NONE,
         },
     };
+	port_id = 0;
     ret = rte_eth_dev_configure(port_id, NUM_RX_QUEUE, NUM_TX_QUEUE, &port_conf);
     if (ret < 0) {
         rte_exit(EXIT_FAILURE, "Port configuration failed\n");
