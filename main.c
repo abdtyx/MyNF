@@ -58,7 +58,7 @@ static int mac_updating = 1;
 static uint16_t nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
 static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
 
-static struct rte_eth_dev_tx_buffer *tx_buffer;
+// static struct rte_eth_dev_tx_buffer *tx_buffer;
 
 struct rte_mempool * l2fwd_pktmbuf_pool = NULL;
 
@@ -94,13 +94,16 @@ static uint32_t print_delay = 10000000;
 static uint8_t measure_latency = 0;
 static uint32_t latency_packets = 0;
 static uint64_t total_latency = 0;
-static uint16_t destination = 0;
+// static uint16_t destination = 0;
 
 /* Default number of packets: 128; user can modify it by -c <packet_number> in command line */
 static uint32_t packet_number = 0;
 char *pcap_filename = NULL;
 pcap_t* handle;
 char errbuf[PCAP_ERRBUF_SIZE];
+char errbuf2[PCAP_ERRBUF_SIZE];
+const char dev[5] = "wlo1"; // 网络设备名，根据实际情况修改
+struct rte_ring* pkt_q;
 
 #define ONVM_CHECK_BIT(flags, n) !!((flags) & (1 << (n)))
 #define ONVM_SET_BIT(flags, n) ((flags) | (1 << (n)))
@@ -234,12 +237,25 @@ l2fwd_parse_args(int argc, char **argv)
 	return ret;
 }
 
+// static void
+// free_ring_elements(struct rte_ring* ring) {
+//     void* elem;
+//     while (rte_ring_dequeue(ring, &elem) == 0) {
+//         // 这里根据元素类型的不同进行内存释放
+//         // 例如，如果元素是一个数据包指针，可以使用rte_pktmbuf_free函数释放内存
+//         free(elem);
+//     }
+// }
+
+pthread_t thread_num;
 static void
 signal_handler(int signum)
 {
 	if (signum == SIGINT || signum == SIGTERM) {
 		printf("\n\nSignal %d received, preparing to exit...\n",
 				signum);
+		// free_ring_elements(pkt_q);
+		rte_ring_free(pkt_q);
 		force_quit = true;
 	}
 }
@@ -454,7 +470,15 @@ static void* forge_pkts(__attribute__((unused)) void* arg) {
 	// pkts tx burst
 	// TODO:
 
-    // // 构造IP数据报
+    // // 构造完整的数据包
+    // char packet[sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr) + 8];
+    // memcpy(packet, &ip_header, sizeof(struct ip));
+    // memcpy(packet + sizeof(struct ip), &udp_header, sizeof(struct udphdr));
+    // memcpy(packet + sizeof(struct ip) + sizeof(struct udphdr), data, sizeof(data));
+for (unsigned int i = 0; i < packet_number; i++) {
+    char* packet_data = malloc(64);    // 缓冲区大小根据实际需要调整
+
+    // 构造IP数据报
     // struct ip ip_header;
     // memset(&ip_header, 0, sizeof(struct ip));
     // ip_header.ip_v = 4;         // IPv4
@@ -466,8 +490,8 @@ static void* forge_pkts(__attribute__((unused)) void* arg) {
     // ip_header.ip_ttl = 64;      // 生存时间
     // ip_header.ip_p = IPPROTO_UDP; // 上层协议为UDP
     // ip_header.ip_sum = 0;       // 先将校验和设置为0
-    // ip_header.ip_src.s_addr = inet_addr("192.168.0.1"); // 源IP地址
-    // ip_header.ip_dst.s_addr = inet_addr("192.168.0.2"); // 目的IP地址
+    // ip_header.ip_src.s_addr = inet_addr("192.168.0.123"); // 源IP地址
+    // ip_header.ip_dst.s_addr = inet_addr("192.168.0.123"); // 目的IP地址
     // ip_header.ip_sum = in_cksum((unsigned short *)&ip_header, sizeof(struct ip)); // 计算校验和
 
     // // 构造UDP数据报
@@ -478,27 +502,37 @@ static void* forge_pkts(__attribute__((unused)) void* arg) {
     // udp_header.uh_ulen = htons(sizeof(struct udphdr) + 8); // UDP数据报总长度
     // udp_header.uh_sum = 0; // 先将校验和设置为0
 
-    // // 构造数据
-    // char data[] = "Hello!"; // 数据内容
+    // 假设目标 MAC 地址是 00:11:22:33:44:55，源 MAC 地址是 11:22:33:44:55:66
+    char dest_mac[] = {0xac, 0x19, 0x8e, 0xd3, 0x4b, 0x31};
+    char src_mac[] = {0xac, 0x19, 0x8e, 0xd3, 0x4b, 0x31};
 
-    // // 构造完整的数据包
-    // char packet[sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr) + 8];
-    // memcpy(packet, &ip_header, sizeof(struct ip));
-    // memcpy(packet + sizeof(struct ip), &udp_header, sizeof(struct udphdr));
-    // memcpy(packet + sizeof(struct ip) + sizeof(struct udphdr), data, sizeof(data));
-	
-	char packet_data[] = "Hello!";
-	int packet_length = strlen(packet_data);
+    // 填充以太网帧的头部
+    memcpy(packet_data, dest_mac, 6);
+    memcpy(packet_data + 6, src_mac, 6);
+    packet_data[12] = 0x88; // 指定以太网类型为 IPv4 (0x0800)
+	packet_data[13] = 0xab;
 
-	for (unsigned int i = 0; i < packet_number; i++) {
-		if (pcap_sendpacket(handle, (const u_char*)packet_data, packet_length) != 0) {
-			fprintf(stderr, "Error sending the packet: %s\n", pcap_geterr(handle));
-		}
-	}
+    // 填充数据负载（可以是任意数据）
+    char payload[] = "Hello, PCAP!\0";
+    memcpy(packet_data + 14, payload, strlen(payload));
+
+    // 打开 pcap 会话
+	// printf("%s %d\n", eth_data, packet_length);
+
+	// for (unsigned int i = 0; i < packet_number; i++) {
+	// 	if (pcap_sendpacket(handle, (const u_char*)packet_data, sizeof(packet_data)) != 0) {
+	// 		fprintf(stderr, "Error sending the packet: %s\n", pcap_geterr(handle));
+	// 	}
+	// }
+	if (rte_ring_enqueue(pkt_q, packet_data))
+		printf("Enqueue failed\n");
+}
+
+	return NULL;
 }
 
 static void
-l2fwd_simple_forward(__attribute__((unused)) u_char *user, __attribute__((unused)) const struct pcap_pkthdr *pkthdr, const u_char *packet)
+l2fwd_simple_forward(char *packet)
 {
 	static uint32_t counter = 0;
 	if (counter++ == print_delay) {
@@ -528,27 +562,32 @@ l2fwd_simple_forward(__attribute__((unused)) u_char *user, __attribute__((unused
 
 	// After pkt action, transmit it
 	// TODO:
-	if (strcmp(packet, "Hello!")) return;
-	if (pcap_sendpacket(handle, (const u_char*)packet, strlen(packet)) != 0) {
-		fprintf(stderr, "Error sending the packet: %s\n", pcap_geterr(handle));
-	}
+    char payload[] = "Hello, PCAP!\0";
+	if (memcmp(packet + 14, payload, strlen(payload))) return;
+	// if (pcap_sendpacket(handle, (const u_char*)packet, 64) != 0) {
+	// 	fprintf(stderr, "Error sending the packet: %s\n", pcap_geterr(handle));
+	// }
+	if (rte_ring_enqueue(pkt_q, packet))
+		printf("speed_tester: Enqueue failed\n");
 }
 
 /* main processing loop */
 static void
 l2fwd_main_loop(void)
 {
-	struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
-	struct rte_mbuf *m;
-	int sent;
+	// struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
+	// struct rte_mbuf *m;
+	// int sent;
 	unsigned lcore_id;
-	uint64_t prev_tsc, diff_tsc, cur_tsc;
-	unsigned j, portid, nb_rx;
-	const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S *
-			BURST_TX_DRAIN_US;
-	struct rte_eth_dev_tx_buffer *buffer;
+	// uint64_t prev_tsc;
+	// uint64_t prev_tsc, diff_tsc, cur_tsc;
+	// unsigned j, portid, nb_rx;
+	// const uint64_t drain_tsc = (rte_get_tsc_hz() + US_PER_S - 1) / US_PER_S *
+	// 		BURST_TX_DRAIN_US;
+	// struct rte_eth_dev_tx_buffer *buffer;
 
-	prev_tsc = 0;
+	// prev_tsc = 0;
+	// pcap_t* recv = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf2);
 
 	lcore_id = rte_lcore_id();
 
@@ -557,7 +596,10 @@ l2fwd_main_loop(void)
 	while (!force_quit) {
 		// rx and forward
 		// TODO:
-		pcap_dispatch(handle, 1, l2fwd_simple_forward, NULL);
+		// pcap_dispatch(recv, 1, l2fwd_simple_forward, NULL);
+		char* packet_data;
+		rte_ring_dequeue(pkt_q, (void**)&packet_data);
+		l2fwd_simple_forward(packet_data);
 	}
 }
 
@@ -577,13 +619,11 @@ main(int argc, char **argv)
 	unsigned int nb_lcores = 0;
 	unsigned int nb_mbufs;
 
-    const char* dev = "wlo1"; // 网络设备名，根据实际情况修改
-
-    handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
-    if (handle == NULL) {
-        fprintf(stderr, "Could not open device %s: %s\n", dev, errbuf);
-        return 1;
-    }
+    // handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
+    // if (handle == NULL) {
+    //     fprintf(stderr, "Could not open device %s: %s\n", dev, errbuf);
+    //     return 1;
+    // }
 
 	/* init EAL */
 	ret = rte_eal_init(argc, argv);
@@ -602,6 +642,10 @@ main(int argc, char **argv)
 		rte_exit(EXIT_FAILURE, "Invalid L2FWD arguments\n");
 
 	printf("MAC updating %s\n", mac_updating ? "enabled" : "disabled");
+
+	pkt_q = rte_ring_create("pkt_queue", 16384, rte_socket_id(), RING_F_SP_ENQ | RING_F_SC_DEQ);
+	if (pkt_q == NULL)
+		rte_exit(EXIT_FAILURE, "Cannot create rte_ring\n");
 
 	/* convert to number of cycles */
 	timer_period *= rte_get_timer_hz();
@@ -623,8 +667,8 @@ main(int argc, char **argv)
 
 	// forge data packets
 	nf_hack_pkt();
-	pthread_t thread_num;
 	pthread_create(&thread_num, NULL, forge_pkts, NULL);
+	pthread_join(thread_num, NULL);
 
 	/* launch per-lcore init on every lcore */
 	rte_eal_mp_remote_launch(l2fwd_launch_one_lcore, NULL, CALL_MASTER);
